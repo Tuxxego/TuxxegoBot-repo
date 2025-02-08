@@ -15,6 +15,7 @@ class AdminCommands extends BotModule {
         this.commands.push(this.disable);
 		this.commands.push(this.disabledcommands);
 		this.commands.push(this.ping);
+		this.commands.push(this.modules);
     }
 
     onError(error) {
@@ -127,6 +128,114 @@ class AdminCommands extends BotModule {
 			sentMessage.edit(
 				`Pong! \`${latency}ms\``,
 			);
+		});
+	}
+	
+		async modules(self, message, args) {
+			
+		const loadedModules = await listAllModules(); 
+
+		if (loadedModules.length === 0) {
+			await message.reply("No modules are currently loaded.");
+			return;
+		}
+
+		const itemsPerPage = 5; 
+		let currentPage = 0;
+		const totalPages = Math.ceil(loadedModules.length / itemsPerPage);
+
+		
+		const createEmbed = (page) => {
+			const start = page * itemsPerPage;
+			const end = start + itemsPerPage;
+			const modulesPage = loadedModules.slice(start, end);
+
+			const embed = new EmbedBuilder()
+				.setTitle('📦 Loaded Modules')
+				.setColor(0x00AE86) 
+				.setDescription('Here are all the modules currently loaded on this bot:')
+				.setFooter({ text: `Page ${page + 1} of ${totalPages}` });
+
+			modulesPage.forEach((mod, index) => {
+				const commandsList = mod.commands.map(cmd => `\`${cmd.name}\``).join(', ') || "No commands";
+
+				embed.addFields({
+					name: `🔹 Module ${start + index + 1}: ${mod.constructor.name}`,
+					value: `**Prefix:** \`${mod.prefix || 'None'}\`\n**Commands:** ${commandsList}`
+				});
+			});
+
+			return embed;
+		};
+
+		
+		const row = new ActionRowBuilder()
+			.addComponents(
+				new ButtonBuilder()
+					.setCustomId('previous')
+					.setLabel('⬅️ Previous')
+					.setStyle(ButtonStyle.Primary)
+					.setDisabled(currentPage === 0), 
+				new ButtonBuilder()
+					.setCustomId('next')
+					.setLabel('Next ➡️')
+					.setStyle(ButtonStyle.Primary)
+					.setDisabled(currentPage === totalPages - 1) 
+			);
+
+		
+		let msg = await message.channel.send({ embeds: [createEmbed(currentPage)], components: [row] });
+
+		
+		const filter = (interaction) => {
+			return interaction.user.id === message.author.id; 
+		};
+
+		const collector = msg.createMessageComponentCollector({ filter, time: 60000 }); 
+
+		collector.on('collect', async (interaction) => {
+			if (interaction.customId === 'previous' && currentPage > 0) {
+				currentPage--;
+			} else if (interaction.customId === 'next' && currentPage < totalPages - 1) {
+				currentPage++;
+			}
+
+			
+			const updatedRow = new ActionRowBuilder()
+				.addComponents(
+					new ButtonBuilder()
+						.setCustomId('previous')
+						.setLabel('⬅️ Previous')
+						.setStyle(ButtonStyle.Primary)
+						.setDisabled(currentPage === 0),
+					new ButtonBuilder()
+						.setCustomId('next')
+						.setLabel('Next ➡️')
+						.setStyle(ButtonStyle.Primary)
+						.setDisabled(currentPage === totalPages - 1)
+				);
+
+			
+			await interaction.update({ embeds: [createEmbed(currentPage)], components: [updatedRow] });
+		});
+
+		collector.on('end', () => {
+			
+			const disabledRow = new ActionRowBuilder()
+				.addComponents(
+					new ButtonBuilder()
+						.setCustomId('previous')
+						.setLabel('⬅️ Previous')
+						.setStyle(ButtonStyle.Primary)
+						.setDisabled(true),
+					new ButtonBuilder()
+						.setCustomId('next')
+						.setLabel('Next ➡️')
+						.setStyle(ButtonStyle.Primary)
+						.setDisabled(true)
+				);
+			
+			msg.edit({ components: [disabledRow] });
 		});
 	}
 }
